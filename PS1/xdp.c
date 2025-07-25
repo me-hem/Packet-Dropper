@@ -4,8 +4,6 @@
 #include "bpf_endian.h"
 #include <stdbool.h>
 
-
-#define DROP_PORT 4040
 #define IPPROTO_TCP 6
 
 char __license[] SEC("license") = "Dual MIT/GPL";
@@ -16,6 +14,16 @@ struct {
     __type(key, __u32);
     __type(value, __u64);
 } dropped_pkt_count SEC(".maps");
+
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u16);
+} drop_port_config SEC(".maps");
+
+
 
 struct iphdr* get_iphdr(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
@@ -40,6 +48,7 @@ int is_tcp(struct iphdr *iph) {
     return (iph->protocol == IPPROTO_TCP) ? IPPROTO_TCP : 0;
 }
 
+
 int match_dport(struct xdp_md *ctx, struct iphdr *iph) {
     void *data_end = (void *)(long)ctx->data_end;
 
@@ -48,9 +57,15 @@ int match_dport(struct xdp_md *ctx, struct iphdr *iph) {
     if ((void *)(tcph + 1) > data_end)
         return 0;
 
-    if (tcph->dest == bpf_htons(DROP_PORT))
-        return DROP_PORT;
-        
+    __u32 key = 0;
+    __u16 *port = bpf_map_lookup_elem(&drop_port_config, &key);
+
+    if (!port)
+        return 0;
+
+    if (tcph->dest == bpf_htons(*port))
+        return 1;
+
     return 0;
 }
 

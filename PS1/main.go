@@ -7,14 +7,17 @@ import (
 	"net"
 	"os"
 	"time"
+	"strconv"
 	"github.com/cilium/ebpf/link"
 )
+
+const defaultPort = 4040
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux bpf xdp.c -- -I../headers
 
 func main() {
 	if len(os.Args) < 2 {
-		log.Fatalf("Please specify a network interface")
+		log.Fatalf("network interface missing")
 	}
 
 	// Lookup the network interface by name
@@ -31,6 +34,21 @@ func main() {
 	}
 	defer objs.Close()
 
+	// Configure the drop port
+	port := defaultPort
+	if len(os.Args) >= 3 {
+		if p, err := strconv.Atoi(os.Args[2]); err == nil {
+			port = p
+		} else {
+			log.Printf("Invalid port input. Falling back to default port %d", defaultPort)
+		}
+	}
+	key := uint32(0)
+	confPort := uint16(port)
+	if err := objs.DropPortConfig.Update(&key, &confPort, 0); err != nil {
+		log.Fatalf("unable to configure port")
+	}
+
 	// Attach the XDP program to the network interface
 	l, err := link.AttachXDP(link.XDPOptions{
 		Program:   objs.IngressProgFunc,
@@ -45,7 +63,7 @@ func main() {
 	log.Printf("Press Ctrl+C to exit and remove the program")
 
 	// Print the number of packets dropped
-	ticker := time.NewTicker(10 * time.Second)
+	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {
