@@ -1,0 +1,47 @@
+//go:build ignore
+
+#include "common.h"
+#include "bpf_endian.h"
+
+char __license[] SEC("license") = "Dual MIT/GPL";
+
+struct {
+    __uint(type, BPF_MAP_TYPE_ARRAY);
+    __uint(max_entries, 1);
+    __type(key, __u32);
+    __type(value, __u64);
+} dropped_pkt_count SEC(".maps");
+
+SEC("xdp")
+unsigned char lookup_protocol(struct xdp_md *ctx) {
+    unsigned char protocol = 0;
+    void *data = (void *)(long)ctx->data;
+    void *data_end = (void *)(long)ctx->data_end;
+    
+    struct ethhdr *eth = data;
+    if (data + sizeof(struct ethhdr) > data_end)
+        return 0;
+    
+    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
+        struct iphdr *iph = data + sizeof(struct ethhdr);
+        if (data + sizeof(struct ethhdr) + sizeof(struct iphdr) <= data_end)
+            protocol = iph->protocol;
+    }
+    return protocol;
+}
+
+
+SEC("xdp")
+int ingress_prog_func(struct xdp_md *ctx) {
+    unsigned char protocol = lookup_protocol(ctx);
+    
+    if (protocol == 6) {  // TCP
+        __u32 key = 0;
+        __u64 *value = bpf_map_lookup_elem(&dropped_pkt_count, &key);
+        if (value)
+            __sync_fetch_and_add(value, 1);  // ✅ Correctly updating value in map
+        return XDP_DROP;
+    }
+    
+    return XDP_PASS;
+}

@@ -45,7 +45,7 @@ func main() {
 	log.Printf("Press Ctrl+C to exit and remove the program")
 
 	// Print the number of packets dropped
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for range ticker.C {

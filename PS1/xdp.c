@@ -2,6 +2,11 @@
 
 #include "common.h"
 #include "bpf_endian.h"
+#include <stdbool.h>
+
+
+#define DROP_PORT 4040
+#define IPPROTO_TCP 6
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
@@ -12,36 +17,61 @@ struct {
     __type(value, __u64);
 } dropped_pkt_count SEC(".maps");
 
-SEC("xdp")
-unsigned char lookup_protocol(struct xdp_md *ctx) {
-    unsigned char protocol = 0;
+struct iphdr* get_iphdr(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
-    
+
     struct ethhdr *eth = data;
-    if (data + sizeof(struct ethhdr) > data_end)
-        return 0;
-    
-    if (eth->h_proto == bpf_htons(ETH_P_IP)) {
-        struct iphdr *iph = data + sizeof(struct ethhdr);
-        if (data + sizeof(struct ethhdr) + sizeof(struct iphdr) <= data_end)
-            protocol = iph->protocol;
-    }
-    return protocol;
+    if ((void *)(eth + 1) > data_end)
+        return NULL;
+
+    if (eth->h_proto != bpf_htons(ETH_P_IP))
+        return NULL;
+
+    struct iphdr *iph = (void *)(eth + 1);
+    if ((void *)(iph + 1) > data_end)
+        return NULL;
+
+    return iph;
 }
+
+
+int is_tcp(struct iphdr *iph) {
+    return (iph->protocol == IPPROTO_TCP) ? IPPROTO_TCP : 0;
+}
+
+int match_dport(struct xdp_md *ctx, struct iphdr *iph) {
+    void *data_end = (void *)(long)ctx->data_end;
+
+    int ip_header_len = iph->ihl * 4;
+    struct tcphdr *tcph = (void *)iph + ip_header_len;
+    if ((void *)(tcph + 1) > data_end)
+        return 0;
+
+    if (tcph->dest == bpf_htons(DROP_PORT))
+        return DROP_PORT;
+        
+    return 0;
+}
+
 
 
 SEC("xdp")
 int ingress_prog_func(struct xdp_md *ctx) {
-    unsigned char protocol = lookup_protocol(ctx);
-    
-    if (protocol == 6) {  // TCP
+    struct iphdr *iph = get_iphdr(ctx);
+    if (!iph)
+        return XDP_PASS;
+
+    if (!is_tcp(iph))
+        return XDP_PASS;
+
+    if (match_dport(ctx, iph)) {
         __u32 key = 0;
         __u64 *value = bpf_map_lookup_elem(&dropped_pkt_count, &key);
         if (value)
-            __sync_fetch_and_add(value, 1);  // ✅ Correctly updating value in map
+            __sync_fetch_and_add(value, 1);
         return XDP_DROP;
     }
-    
+
     return XDP_PASS;
 }

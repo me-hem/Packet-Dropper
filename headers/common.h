@@ -110,6 +110,17 @@ struct iphdr {
 	__be32 daddr;
 };
 
+
+struct tcphdr {
+	__be16	source;
+	__be16	dest;
+	__be32	seq;
+	__be32	ack_seq;
+	__be16	window;
+	__sum16	check;
+	__be16	urg_ptr;
+};
+
 enum {
 	BPF_ANY     = 0,
 	BPF_NOEXIST = 1,
