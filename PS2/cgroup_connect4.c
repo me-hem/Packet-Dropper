@@ -11,6 +11,7 @@ char __license[] SEC("license") = "GPL";
 #define PROCESS_MAX_LEN 16
 #define ALLOWED_PORT 4040
 
+// Structure to store dropped packet statistics
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -18,6 +19,21 @@ struct {
     __type(value, __u64);
 } dropped_pkt_count SEC(".maps");
 
+
+// Function to check whether protocol is TCP or not
+int is_tcp(struct bpf_sock_addr *ctx) {
+    return (ctx->protocol == IPPROTO_TCP) ? 1 : 0;
+}
+
+
+// Function to match destination port
+int match_dport(struct bpf_sock_addr *ctx) {
+    __u16 dport = bpf_ntohs(ctx->user_port);
+    return (dport == ALLOWED_PORT) ? 1 : 0;
+}
+
+
+// Function to match process name
 int match_process_name() {
     char pname[PROCESS_MAX_LEN];
     bpf_get_current_comm(&pname, sizeof(pname));
@@ -31,15 +47,8 @@ int match_process_name() {
     return 1;
 }
 
-int match_dport(struct bpf_sock_addr *ctx) {
-    __u16 dport = bpf_ntohs(ctx->user_port);
-    return (dport == ALLOWED_PORT) ? 1 : 0;
-}
 
-int is_tcp(struct bpf_sock_addr *ctx) {
-    return (ctx->protocol == IPPROTO_TCP) ? 1 : 0;
-}
-
+// Function to filter packets
 SEC("cgroup/connect4")
 int ingress_prog_func(struct bpf_sock_addr *ctx) {
     if (!is_tcp(ctx))

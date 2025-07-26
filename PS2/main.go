@@ -78,7 +78,6 @@ func detectCgroupPath() (string, error) {
 
 	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		// example fields: cgroup2 /sys/fs/cgroup/unified cgroup2 rw,nosuid,nodev,noexec,relatime 0 0
 		fields := strings.Split(scanner.Text(), " ")
 		if len(fields) >= 3 && fields[2] == "cgroup2" {
 			return fields[1], nil

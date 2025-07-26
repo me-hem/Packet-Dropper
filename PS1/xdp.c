@@ -8,6 +8,7 @@
 
 char __license[] SEC("license") = "Dual MIT/GPL";
 
+// Structure to store dropped packet statistics
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -15,7 +16,7 @@ struct {
     __type(value, __u64);
 } dropped_pkt_count SEC(".maps");
 
-
+// Structure to configure port from user space
 struct {
     __uint(type, BPF_MAP_TYPE_ARRAY);
     __uint(max_entries, 1);
@@ -24,7 +25,7 @@ struct {
 } drop_port_config SEC(".maps");
 
 
-
+// Function to extract ip header from data packet
 struct iphdr* get_iphdr(struct xdp_md *ctx) {
     void *data = (void *)(long)ctx->data;
     void *data_end = (void *)(long)ctx->data_end;
@@ -44,11 +45,12 @@ struct iphdr* get_iphdr(struct xdp_md *ctx) {
 }
 
 
+// Function to check whether protocol is TCP or not
 int is_tcp(struct iphdr *iph) {
     return (iph->protocol == IPPROTO_TCP) ? IPPROTO_TCP : 0;
 }
 
-
+// Function to match destination port
 int match_dport(struct xdp_md *ctx, struct iphdr *iph) {
     void *data_end = (void *)(long)ctx->data_end;
 
@@ -70,14 +72,11 @@ int match_dport(struct xdp_md *ctx, struct iphdr *iph) {
 }
 
 
-
+// Function to filter packets
 SEC("xdp")
 int ingress_prog_func(struct xdp_md *ctx) {
     struct iphdr *iph = get_iphdr(ctx);
-    if (!iph)
-        return XDP_PASS;
-
-    if (!is_tcp(iph))
+    if (!iph || !is_tcp(iph))
         return XDP_PASS;
 
     if (match_dport(ctx, iph)) {
