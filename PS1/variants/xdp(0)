@@ -39,7 +39,7 @@ int ingress_prog_func(struct xdp_md *ctx) {
         __u32 key = 0;
         __u64 *value = bpf_map_lookup_elem(&dropped_pkt_count, &key);
         if (value)
-            __sync_fetch_and_add(value, 1);  // ✅ Correctly updating value in map
+            __sync_fetch_and_add(value, 1);  // Correctly updating value in map
         return XDP_DROP;
     }
     
