@@ -1,4 +1,4 @@
-# eBPF Network Filtering Assignment
+# eBPF-based Network Filtering
 
 This repository contains two eBPF programs that demonstrate different approaches to network traffic filtering using the Extended Berkeley Packet Filter (eBPF) framework.
 
